@@ -1,0 +1,35 @@
+(function testCode(){
+const fs=require('node:fs'),vm=require('node:vm'),assert=require('node:assert/strict');
+const html=fs.readFileSync(process.argv[2],'utf8');
+const js=html.match(/<script>([\s\S]*?)<\/script>/)[1];
+new vm.Script(js);
+const context=vm.createContext({TextEncoder});
+vm.runInContext(js.slice(0,js.indexOf('const byId=')),context);
+const review=(a,b)=>context.reviewLocales(JSON.stringify(a),JSON.stringify(b));
+let passed=0;const tests=[];
+function check(name,fn){fn();passed++;tests.push(name);}
+check('matching nested objects',()=>assert.equal(review({m:{x:'Hi {name}'}},{m:{x:'你好 {name}'}}).issues.length,0));
+check('missing key',()=>assert.equal(review({a:'a',b:'b'},{a:'译'}).issues[0].code,'missing'));
+check('blank value',()=>assert.equal(review({a:'Hello'},{a:'  '}).errors,1));
+check('variable mismatch',()=>assert.equal(review({a:'{name}'},{a:'{other}'}).errors,1));
+check('variable multiplicity',()=>assert.equal(review({a:'{0} {0}'},{a:'{0}'}).errors,1));
+check('variable order ignored',()=>assert.equal(review({a:'{0} {1}'},{a:'{1} {0}'}).errors,0));
+check('variable style matters',()=>assert.equal(review({a:'{name}'},{a:'{{name}}'}).errors,1));
+check('dollar variables',()=>assert.equal(review({a:'Hi ${name}'},{a:'你好 ${name}'}).issues.length,0));
+check('ICU flagged unsupported',()=>assert.equal(review({a:'{n, plural, one{one} other{many}}'},{a:'译'}).manual,1));
+check('printf flagged unsupported',()=>assert.equal(review({a:'Hello %s'},{a:'你好 %s'}).manual,1));
+check('extra key',()=>assert.equal(review({a:'Hi'},{a:'你好',b:'新'}).issues[0].code,'extra'));
+check('same text advisory',()=>assert.equal(review({a:'Brand'},{a:'Brand'}).issues[0].code,'same'));
+check('JSON Pointer collision avoidance',()=>assert.equal(review({'a/b':'hello',a:{b:'world'}},{'a/b':'你好',a:{b:'世界'}}).sourceCount,2));
+check('prototype key retained',()=>assert.equal(context.reviewLocales('{"__proto__":"Hi"}','{"__proto__":"你好"}').sourceCount,1));
+check('invalid JSON rejected',()=>assert.throws(()=>context.reviewLocales('{','{}')));
+check('arrays rejected',()=>assert.throws(()=>review({a:['x']},{a:'译'})));
+check('null rejected',()=>assert.throws(()=>review({a:null},{a:'译'})));
+check('empty source rejected',()=>assert.throws(()=>review({},{a:'译'})));
+check('BOM accepted',()=>assert.equal(context.reviewLocales('\ufeff{"a":"Hi"}','{"a":"你好"}').errors,0));
+check('oversize rejected',()=>assert.throws(()=>context.flattenLocale(' '.repeat(1048577))));
+check('deep input rejected',()=>{let obj={a:'Hi'};for(let i=0;i<34;i++)obj={x:obj};assert.throws(()=>review(obj,{a:'译'}));});
+check('fixture expected 4 findings',()=>{const r=review({menu:{play:'Play',exit:'Exit'},greeting:'Hello {name}',reward:'Coins: {0}'},{menu:{play:'开始',exit:''},greeting:'你好 {player}',unused:'旧入口'});assert.equal(r.errors,3);assert.equal(r.issues.length,4);});
+check('no network or storage APIs',()=>assert.equal(/\b(fetch|XMLHttpRequest|WebSocket|localStorage|sessionStorage|sendBeacon)\b/.test(js),false));
+console.log(JSON.stringify({passed,tests,browserQA:'NOT RUN: local file URL blocked by browser security policy'},null,2));
+})();

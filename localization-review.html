@@ -1,0 +1,103 @@
+<!doctype html>
+<html lang="zh-CN"><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src 'unsafe-inline'; style-src 'unsafe-inline'; img-src data:; connect-src 'none'; base-uri 'none'; form-action 'none'">
+<title>译前验收 · JSON 本地化检查样品</title>
+<style>
+:root{font-family:system-ui,"Microsoft YaHei",sans-serif;color:#e7edf8;background:#0d1421;color-scheme:dark}*{box-sizing:border-box}body{max-width:1120px;margin:0 auto;padding:44px 24px}header{border-bottom:1px solid #2b3951;padding-bottom:24px;margin-bottom:28px}.tag{color:#7cd8bd;font-size:13px;letter-spacing:2px}h1{font-size:34px;margin:14px 0}p{color:#aebbd0;line-height:1.8}.grid{display:grid;grid-template-columns:1fr 1fr;gap:20px}section{background:#152034;padding:22px;border:1px solid #293a53;border-radius:16px}h2{font-size:17px;margin:0 0 15px}label{display:block;margin:14px 0 8px}textarea{width:100%;height:255px;resize:vertical;background:#0d1421;color:#d6e9ff;border:1px solid #3b4d66;border-radius:8px;padding:14px;font:14px/1.6 Consolas,monospace}button{padding:12px 20px;border:1px solid #456077;border-radius:8px;background:#233249;color:inherit;cursor:pointer;margin:8px 10px 8px 0}button.primary{background:#72ddba;color:#102a23;border-color:#72ddba;font-weight:700}button:disabled{opacity:.45;cursor:not-allowed}.actions{margin:18px 0}.status{padding:16px;background:#18283a;border-radius:8px;line-height:1.7}table{width:100%;border-collapse:collapse;margin-top:18px;font-size:14px}td,th{text-align:left;border-bottom:1px solid #293a53;padding:12px;overflow-wrap:anywhere}td:nth-child(2){max-width:300px;font-family:Consolas,monospace}.small{font-size:13px}.error{color:#ffb6ad}details{margin-top:22px;color:#b8c5d9;line-height:1.8}footer{margin-top:28px;font-size:12px;color:#8b9bb3}@media(max-width:700px){.grid{grid-template-columns:1fr}body{padding:24px 14px}h1{font-size:28px}}
+</style>
+<header><span class="tag">离线工具 · 研究样品 0.1</span><h1>交付前，先找出漏掉的那一句。</h1><p>比较两份 JSON 语言文件，检查漏项、空文本及基础变量不一致。文件在当前浏览器中处理。</p></header>
+<div class="grid"><section><h2>01 · 源语言</h2><label for="sourceFile">选择 UTF-8 JSON（最大 1 MiB）</label><input id="sourceFile" type="file" accept=".json,application/json"><label for="source">或粘贴源语言 JSON</label><textarea id="source" spellcheck="false" placeholder='{"welcome":"Hello {name}"}'></textarea></section>
+<section><h2>02 · 目标语言</h2><label for="targetFile">选择 UTF-8 JSON（最大 1 MiB）</label><input id="targetFile" type="file" accept=".json,application/json"><label for="target">或粘贴目标语言 JSON</label><textarea id="target" spellcheck="false" placeholder='{"welcome":"你好 {name}"}'></textarea></section></div>
+<div class="actions"><button class="primary" id="review">开始检查</button><button id="demo">载入问题示例</button><button id="fixed">载入修正示例</button><button id="download" disabled>导出 JSON 报告</button></div>
+<div id="status" class="status" role="status" aria-live="polite">先载入示例，即可体验检查流程。不会修改原始文件。</div>
+<div style="overflow:auto"><table id="results" hidden><thead><tr><th>级别</th><th>JSON 路径</th><th>检查结果</th></tr></thead><tbody id="rows"></tbody></table></div>
+<details><summary>支持范围与已知限制（使用前请阅读）</summary><p>支持字符串及嵌套对象；不支持数组、数字、布尔或 null。最多 10000 条文本、32 层嵌套。路径使用 JSON Pointer，避免点号键名与嵌套结构混淆。</p><p>基础变量格式：{name}、{0}、{{name}}、${name}，按格式、名称和次数比较。检测到花括号残留或 printf 类格式时提示人工检查，不声称支持 ICU、复数或复杂模板。</p><p>标准 JSON 解析会覆盖重复属性名，本样品无法检查重复属性名。相同原文可能是合法品牌名。未发现问题不等于翻译正确，也不证明字体完整、界面放得下或引擎可导入。</p><p>不联网、不保存到浏览器存储。导出报告包含键名，分享前请自行确认是否包含内部信息。当前为研究样品，不是已经验证商业价值的商品。</p></details><footer>原创实现 · 无第三方库 · 无订阅与 API 成本</footer>
+<script>
+function flattenLocale(text) {
+ if (new TextEncoder().encode(text).length > 1048576) throw Error("每份 JSON 最大 1 MiB");
+ const root=JSON.parse(text.replace(/^\uFEFF/,""));
+ if(!root || Array.isArray(root) || typeof root!=="object") throw Error("根节点必须是 JSON 对象");
+ const out=new Map();
+ function walk(obj,path,depth){
+  if(depth>32) throw Error("嵌套超过 32 层");
+  for(const [key,value] of Object.entries(obj)){
+   const p=path+"/"+key.replace(/~/g,"~0").replace(/\//g,"~1");
+   if(typeof value==="string"){if(value.length>20000)throw Error("单条文本超过 20000 个 UTF-16 单元");out.set(p,value);}
+   else if(value && typeof value==="object" && !Array.isArray(value))walk(value,p,depth+1);
+   else throw Error(p+"：只支持字符串及嵌套对象，不支持数组、数字、布尔或 null");
+   if(out.size>10000)throw Error("最多 10000 条文本");
+  }
+ }
+ walk(root,"",0);
+ if(!out.size)throw Error("未找到文本");
+ return out;
+}
+function inspectVariables(s){
+ const re=/\$\{[A-Za-z_]\w*\}|\{\{[A-Za-z_]\w*\}\}|\{(?:[A-Za-z_]\w*|\d+)\}/g;
+ const tokens=s.match(re)||[];
+ const residue=s.replace(re,"");
+ const unsupported=/[{}]|%(?:\d+\$)?[-+ #0]*(?:\d+|\*)?(?:\.(?:\d+|\*))?[a-zA-Z]/.test(residue);
+ return {tokens:tokens.sort(),unsupported};
+}
+function reviewLocales(sourceText,targetText){
+ const source=flattenLocale(sourceText), target=flattenLocale(targetText),issues=[];
+ const add=(level,key,code,message)=>issues.push({level,key,code,message});
+ let compared=0;
+ for(const [key,value] of source){
+  if(!target.has(key)){add("错误",key,"missing","目标语言缺少此条目");continue;}
+  compared++;
+  const translated=target.get(key);
+  if(!translated.trim())add("错误",key,"blank","目标文本为空或仅含空白");
+  const a=inspectVariables(value),b=inspectVariables(translated);
+  if(a.unsupported||b.unsupported)add("待人工检查",key,"unsupported","存在未支持的变量/花括号格式，跳过该条变量比较");
+  else if(JSON.stringify(a.tokens)!==JSON.stringify(b.tokens))add("错误",key,"variables","变量名称、格式或出现次数不一致");
+  if(translated===value && value.trim())add("提示",key,"same","与源文本相同；品牌名等可能正常");
+ }
+ for(const key of target.keys())if(!source.has(key))add("提示",key,"extra","仅目标语言存在，确认是否已废弃");
+ return {version:"0.1.0-prototype",sourceCount:source.size,targetCount:target.size,compared,
+  errors:issues.filter(x=>x.level==="错误").length,manual:issues.filter(x=>x.level==="待人工检查").length,issues,
+  limitation:"仅结构与基础变量检查，不验证翻译语义、重复 JSON 属性名、字体、视觉排版或引擎导入。"};
+}
+const byId=id=>document.getElementById(id);
+let lastReport=null;
+const versions={source:0,target:0};
+function invalidate(){lastReport=null;byId("download").disabled=true;byId("results").hidden=true;byId("rows").replaceChildren();byId("status").textContent="内容已更新，请重新检查。";}
+for(const name of ["source","target"]){
+ byId(name).addEventListener("input",()=>{versions[name]++;invalidate();});
+ byId(name+"File").addEventListener("change",async()=>{
+  const revision=++versions[name];invalidate();byId(name).value="";
+  try{const file=byId(name+"File").files[0];if(!file)return;
+   if(file.size>1048576)throw Error("文件超过 1 MiB");
+   const text=new TextDecoder("utf-8",{fatal:true}).decode(await file.arrayBuffer());
+   if(versions[name]!==revision)return;
+   byId(name).value=text;invalidate();
+  }catch(e){if(versions[name]===revision)byId("status").textContent="读取失败："+e.message;}
+ });
+}
+const sourceExample={menu:{play:"Play",exit:"Exit"},greeting:"Hello {name}",reward:"Coins: {0}"};
+const badExample={menu:{play:"开始",exit:""},greeting:"你好 {player}",unused:"旧入口"};
+const fixedExample={menu:{play:"开始",exit:"退出"},greeting:"你好 {name}",reward:"金币：{0}"};
+function example(target){versions.source++;versions.target++;byId("source").value=JSON.stringify(sourceExample,null,2);byId("target").value=JSON.stringify(target,null,2);byId("sourceFile").value="";byId("targetFile").value="";invalidate();}
+byId("demo").onclick=()=>example(badExample);
+byId("fixed").onclick=()=>example(fixedExample);
+byId("review").onclick=()=>{
+ invalidate();
+ try{
+ lastReport=reviewLocales(byId("source").value,byId("target").value);
+ byId("status").textContent="源语言 "+lastReport.sourceCount+" 项 · 目标语言 "+lastReport.targetCount+" 项 · 错误 "+lastReport.errors+" 项 · 待人工检查 "+lastReport.manual+" 项 · 共 "+lastReport.issues.length+" 条发现。"+(lastReport.issues.length?"":"未发现已支持规则的问题；仍需人工验收。");
+ const fragment=document.createDocumentFragment();
+ for(const item of lastReport.issues.slice(0,500)){
+  const tr=document.createElement("tr");
+  for(const text of [item.level,item.key,item.message]){const td=document.createElement("td");td.textContent=text;tr.append(td);}
+  fragment.append(tr);
+ }
+ byId("rows").append(fragment);byId("results").hidden=!lastReport.issues.length;byId("download").disabled=false;
+ if(lastReport.issues.length>500)byId("status").textContent+=" 页面仅展示前 500 条，导出包含全部。";
+ }catch(e){byId("status").textContent="无法检查："+e.message;}
+};
+byId("download").onclick=()=>{
+ if(!lastReport)return;
+ const url=URL.createObjectURL(new Blob([JSON.stringify(lastReport,null,2)],{type:"application/json;charset=utf-8"}));
+ const a=document.createElement("a");a.href=url;a.download="localization-review.json";a.click();setTimeout(()=>URL.revokeObjectURL(url),1000);
+};
+</script></html>

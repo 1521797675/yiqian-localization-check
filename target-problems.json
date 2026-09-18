@@ -1,0 +1,8 @@
+{
+  "menu": {
+    "play": "开始",
+    "exit": ""
+  },
+  "greeting": "你好 {player}",
+  "unused": "旧入口"
+}

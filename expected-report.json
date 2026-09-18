@@ -1,0 +1,35 @@
+{
+  "version": "0.1.0-prototype",
+  "sourceCount": 4,
+  "targetCount": 4,
+  "compared": 3,
+  "errors": 3,
+  "manual": 0,
+  "issues": [
+    {
+      "level": "错误",
+      "key": "/menu/exit",
+      "code": "blank",
+      "message": "目标文本为空或仅含空白"
+    },
+    {
+      "level": "错误",
+      "key": "/greeting",
+      "code": "variables",
+      "message": "变量名称、格式或出现次数不一致"
+    },
+    {
+      "level": "错误",
+      "key": "/reward",
+      "code": "missing",
+      "message": "目标语言缺少此条目"
+    },
+    {
+      "level": "提示",
+      "key": "/unused",
+      "code": "extra",
+      "message": "仅目标语言存在，确认是否已废弃"
+    }
+  ],
+  "limitation": "仅结构与基础变量检查，不验证翻译语义、重复 JSON 属性名、字体、视觉排版或引擎导入。"
+}

@@ -1,0 +1,8 @@
+{
+  "menu": {
+    "play": "开始",
+    "exit": "退出"
+  },
+  "greeting": "你好 {name}",
+  "reward": "金币：{0}"
+}
